@@ -4,10 +4,68 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Merchant {
+  id    Int     @id @default(autoincrement())
+  name  String
+  email String  @unique
+  phone String
+
+  // Relations
+  inventoryItems InventoryItem[]
+  transactions   Transaction[]
+  udhaarEntries  UdhaarEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryItem {
+  id        Int     @id @default(autoincrement())
+  name      String
+  sku       String  @unique
+  quantity  Int
+  price     Float
+
+  // Foreign key
+  merchantId Int
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id          Int     @id @default(autoincrement())
+  type        String  // e.g., "sale", "purchase", "return"
+  amount      Float
+  description String?
+
+  // Foreign key
+  merchantId Int
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model UdhaarEntry {
+  id           Int     @id @default(autoincrement())
+  amount       Float
+  creditorName String
+  status       String  // e.g., "pending", "paid", "overdue"
+  dueDate      DateTime?
+
+  // Foreign key
+  merchantId Int
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
