@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "InventoryItem" ADD COLUMN     "dailyRate" DOUBLE PRECISION NOT NULL DEFAULT 10;

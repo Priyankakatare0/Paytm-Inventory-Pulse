@@ -20,6 +20,7 @@ async function main() {
         sku: "PARLE-G-001",
         quantity: 100,
         price: 10.99,
+        dailyRate: 20,
         merchantId: merchant.id,
       },
       {
@@ -27,6 +28,7 @@ async function main() {
         sku: "PARA-001",
         quantity: 50,
         price: 5.99,
+        dailyRate: 8,
         merchantId: merchant.id,
       },
       {
@@ -34,6 +36,7 @@ async function main() {
         sku: "ASPR-001",
         quantity: 75,
         price: 3.99,
+        dailyRate: 6,
         merchantId: merchant.id,
       },
       {
@@ -41,6 +44,7 @@ async function main() {
         sku: "COUGH-001",
         quantity: 30,
         price: 15.99,
+        dailyRate: 5,
         merchantId: merchant.id,
       },
       {
@@ -48,6 +52,7 @@ async function main() {
         sku: "VITC-001",
         quantity: 200,
         price: 2.99,
+        dailyRate: 15,
         merchantId: merchant.id,
       },
       {
@@ -55,6 +60,7 @@ async function main() {
         sku: "BAND-001",
         quantity: 500,
         price: 0.99,
+        dailyRate: 40,
         merchantId: merchant.id,
       },
     ],

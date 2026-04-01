@@ -17,6 +17,7 @@ model Merchant {
   name  String
   email String  @unique
   phone String
+  pinHash String?
 
   // Relations
   inventoryItems InventoryItem[]
@@ -33,6 +34,7 @@ model InventoryItem {
   sku       String  @unique
   quantity  Int
   price     Float
+  dailyRate Float   @default(10)
 
   // Foreign key
   merchantId Int
@@ -59,6 +61,7 @@ model UdhaarEntry {
   id           Int     @id @default(autoincrement())
   amount       Float
   creditorName String
+  upiId        String?
   status       String  // e.g., "pending", "paid", "overdue"
   dueDate      DateTime?
 
