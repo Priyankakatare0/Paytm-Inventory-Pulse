@@ -113,6 +113,7 @@ export default function Dashboard() {
     socket.on("disconnect", handleDisconnect);
     socket.on("transaction:created", handleTxCreated);
     socket.on("udhaar:created", handleUdhaarCreated);
+    socket.on("udhaar:updated", handleUdhaarCreated);
 
     // Set initial state
     setRtStatus(socket.connected ? "connected" : "disconnected");
@@ -123,6 +124,7 @@ export default function Dashboard() {
       socket.off("disconnect", handleDisconnect);
       socket.off("transaction:created", handleTxCreated);
       socket.off("udhaar:created", handleUdhaarCreated);
+      socket.off("udhaar:updated", handleUdhaarCreated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

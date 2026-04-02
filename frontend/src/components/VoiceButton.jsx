@@ -4,8 +4,9 @@ import { Loader2, Mic, MicOff } from "lucide-react";
 import { api, getApiErrorMessage } from "../lib/api";
 
 export default function VoiceButton({ onProcessed }) {
-	const [status, setStatus] = useState("idle"); // idle | listening | processing | error
+	const [status, setStatus] = useState("idle"); // idle | listening | review | processing | error
 	const [transcript, setTranscript] = useState("");
+	const [pending, setPending] = useState("");
 	const recognitionRef = useRef(null);
 	const transcriptRef = useRef("");
 	const [typed, setTyped] = useState("");
@@ -32,6 +33,17 @@ export default function VoiceButton({ onProcessed }) {
 			}
 		},
 		[onProcessed]
+	);
+
+	const stageForReview = useCallback(
+		(text) => {
+			const finalTranscript = String(text || "").trim();
+			if (!finalTranscript) return;
+			setPending(finalTranscript);
+			setTranscript(finalTranscript);
+			setStatus("review");
+		},
+		[]
 	);
 
 	const toggle = useCallback(async () => {
@@ -75,7 +87,7 @@ export default function VoiceButton({ onProcessed }) {
 				setStatus("idle");
 				return;
 			}
-			await submitTranscript(finalTranscript);
+			stageForReview(finalTranscript);
 		};
 
 		recognition.start();
@@ -119,11 +131,45 @@ export default function VoiceButton({ onProcessed }) {
 					{status === "listening" && (
 						<span className="text-red-600 font-medium">Listening…</span>
 					)}
+					{status === "review" && (
+						<span className="text-sky-700 font-medium">Review & confirm</span>
+					)}
 					{transcript && (
 						<p className="text-slate-500 mt-0.5">“{transcript}”</p>
 					)}
 				</div>
 			)}
+
+			{status === "review" ? (
+				<div className="w-full max-w-[260px] flex gap-2">
+					<button
+						type="button"
+						onClick={() => {
+							const text = String(pending || "").trim();
+							if (!text) {
+								setStatus("idle");
+								return;
+							}
+							submitTranscript(text);
+						}}
+						className="flex-1 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white py-2 disabled:opacity-60"
+						disabled={status === "processing"}
+					>
+						Confirm
+					</button>
+					<button
+						type="button"
+						onClick={() => {
+							setPending("");
+							setTranscript("");
+							setStatus("idle");
+						}}
+						className="flex-1 text-xs rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 py-2"
+					>
+						Cancel
+					</button>
+				</div>
+			) : null}
 
 			{!speechSupported && (
 				<div className="w-full max-w-[260px] flex flex-col gap-2">
@@ -136,11 +182,11 @@ export default function VoiceButton({ onProcessed }) {
 					/>
 					<button
 						type="button"
-						onClick={() => submitTranscript(typed)}
+						onClick={() => stageForReview(typed)}
 						disabled={status === "processing"}
 						className="w-full text-xs rounded-lg bg-slate-900 text-white py-1.5 disabled:opacity-60"
 					>
-						Submit
+						Review
 					</button>
 				</div>
 			)}

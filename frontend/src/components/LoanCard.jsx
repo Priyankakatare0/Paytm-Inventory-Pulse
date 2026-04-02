@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { X, Zap, CheckCircle2, ArrowRight } from "lucide-react";
 
-export default function LoanCard({ loan, onClose }) {
+export default function LoanCard({ loan, onClose, onApproved }) {
 	const [step, setStep] = useState(0);
 	const [approved, setApproved] = useState(false);
 
@@ -78,7 +78,10 @@ export default function LoanCard({ loan, onClose }) {
 							<button
 								onClick={() => {
 								if (steps.length && step < maxStep) setStep(step + 1);
-								else setApproved(true);
+								else {
+									setApproved(true);
+									onApproved?.(loan);
+								}
 							}}
 							className="w-full bg-sky-500 hover:bg-sky-600 text-white py-3.5 rounded-xl font-extrabold text-lg flex items-center justify-center gap-2 transition"
 						>

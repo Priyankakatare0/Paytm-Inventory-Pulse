@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { initSocket } = require("./services/socket");
+const { startReminderCron } = require("./services/reminders");
 
 const authRoutes = require("./routes/auth");
 const inventoryRoutes = require("./routes/inventory");
@@ -51,5 +52,8 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
   console.log(`🔑 Login at POST http://localhost:${PORT}/api/auth/login`);
+
+	startReminderCron();
+	console.log("⏰ Reminder cron started");
 });
 

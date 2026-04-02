@@ -62,8 +62,16 @@ model UdhaarEntry {
   amount       Float
   creditorName String
   upiId        String?
+  upiIdMasked  String?
+  upiIdHash    String?
   status       String  // e.g., "pending", "paid", "overdue"
   dueDate      DateTime?
+
+  // Reminder scheduling (emails sent to Merchant.email)
+  reminderEnabled     Boolean  @default(false)
+  reminderIntervalMins Int     @default(1440) // daily
+  reminderNextAt      DateTime?
+  reminderLastSentAt  DateTime?
 
   // Foreign key
   merchantId Int

@@ -3,6 +3,7 @@ const router = express.Router();
 const prisma = require("../db");
 const { parseTranscript } = require("../services/claude");
 const { getIO } = require("../services/socket");
+const { maskUpiId, hashUpiId } = require("../services/privacy");
 
 function inferPersonName(rawTranscript) {
   const raw = String(rawTranscript || "").trim();
@@ -239,15 +240,48 @@ router.post("/voice", async (req, res) => {
         if (recentKnownCustomer?.upiId) upiId = recentKnownCustomer.upiId;
       }
 
-      udhaarEntry = await prisma.udhaarEntry.create({
-        data: {
-          amount: udhaar,
-          creditorName,
-          upiId,
-          status: "pending",
-          merchantId,
-        },
-      });
+      // If we can identify a person, prefer updating their existing pending udhaar entry
+      // instead of creating a new row (feels like an ongoing ledger).
+      const canUpdateExisting = Boolean(inferredName);
+      if (canUpdateExisting) {
+        const existingPending = await prisma.udhaarEntry.findFirst({
+          where: {
+            merchantId: Number(merchantId),
+            status: "pending",
+            creditorName: {
+              equals: String(creditorName),
+              mode: "insensitive",
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (existingPending) {
+          udhaarEntry = await prisma.udhaarEntry.update({
+            where: { id: existingPending.id },
+            data: {
+              amount: existingPending.amount + udhaar,
+					upiId: existingPending.upiId || upiId,
+					upiIdMasked: existingPending.upiIdMasked || maskUpiId(existingPending.upiId || upiId),
+					upiIdHash: existingPending.upiIdHash || hashUpiId(existingPending.upiId || upiId),
+            },
+          });
+        }
+      }
+
+      if (!udhaarEntry) {
+        udhaarEntry = await prisma.udhaarEntry.create({
+          data: {
+            amount: udhaar,
+            creditorName,
+            upiId,
+				upiIdMasked: maskUpiId(upiId),
+				upiIdHash: hashUpiId(upiId),
+            status: "pending",
+            merchantId,
+          },
+        });
+      }
 
       txCreates.push(
         prisma.transaction.create({
@@ -272,7 +306,7 @@ router.post("/voice", async (req, res) => {
       for (const t of createdTransactions) {
         io.emit("transaction:created", t);
       }
-      if (udhaarEntry) io.emit("udhaar:created", udhaarEntry);
+      if (udhaarEntry) io.emit("udhaar:updated", udhaarEntry);
     } catch (_) {
       // Socket not initialized; ignore.
     }
@@ -280,7 +314,7 @@ router.post("/voice", async (req, res) => {
     try {
       // Notify clients for "live" updates
       getIO().emit("transaction:created", { merchantId: Number(merchantId) });
-      if (udhaarEntry) getIO().emit("udhaar:created", { merchantId: Number(merchantId) });
+      if (udhaarEntry) getIO().emit("udhaar:updated", { merchantId: Number(merchantId) });
     } catch (_) {
       // Socket not critical for core flow
     }

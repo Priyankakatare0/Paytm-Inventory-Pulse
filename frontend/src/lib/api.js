@@ -98,6 +98,11 @@ export async function settleUdhaar(id, payload) {
 	return res.data;
 }
 
+export async function sendUdhaarReminder(id, payload) {
+	const res = await api.post(`/udhaar/${id}/reminder`, payload);
+	return res.data;
+}
+
 // ---- Dashboard (protected) ----
 export async function getDashboardSummary(params) {
 	const res = await api.get("/dashboard/summary", { params });

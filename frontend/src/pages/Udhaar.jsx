@@ -8,12 +8,27 @@ import {
 	Phone,
 	X,
 } from "lucide-react";
-import { createUdhaar, getUdhaar, settleUdhaar } from "../lib/api";
+import { createUdhaar, getUdhaar, sendUdhaarReminder, settleUdhaar } from "../lib/api";
 import { getSocket } from "../lib/socket";
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 
 const tabs = ["all", "pending", "overdue", "paid"];
+
+function maskUpiId(raw) {
+	const s = String(raw || "").trim();
+	if (!s) return "—";
+	const at = s.indexOf("@");
+	if (at <= 1) {
+		if (s.length <= 4) return "***";
+		return `${s.slice(0, 1)}***${s.slice(-1)}`;
+	}
+	const user = s.slice(0, at);
+	const domain = s.slice(at + 1);
+	const userMasked = user.length <= 2 ? "***" : `${user.slice(0, 2)}***`;
+	const domainMasked = domain.length <= 2 ? "***" : `***${domain.slice(-2)}`;
+	return `${userMasked}@${domainMasked}`;
+}
 
 function getComputedStatus(entry) {
 	if (entry?.status === "paid") return "paid";
@@ -36,6 +51,7 @@ export default function Udhaar() {
 	const [loading, setLoading] = useState(true);
 	const [items, setItems] = useState([]);
 	const [error, setError] = useState("");
+		const [success, setSuccess] = useState("");
 
 	const [form, setForm] = useState({
 		customerName: "",
@@ -46,6 +62,7 @@ export default function Udhaar() {
 
 	async function refresh() {
 		setError("");
+		setSuccess("");
 		setLoading(true);
 		try {
 			const data = await getUdhaar();
@@ -136,6 +153,22 @@ export default function Udhaar() {
 		}
 	}
 
+	async function onSendReminder(id) {
+		setError("");
+		setSuccess("");
+		try {
+			const res = await sendUdhaarReminder(id, { enabled: true, sendNow: true });
+			if (res?.sent) {
+				setSuccess("Reminder sent to your email");
+			} else {
+				setSuccess("Reminder scheduled (email delivery in demo mode)");
+			}
+			setTimeout(() => setSuccess(""), 2500);
+		} catch (e) {
+			setError(e?.response?.data?.error || e?.message || "Failed to send reminder");
+		}
+	}
+
 	return (
 		<div className="space-y-4 max-w-4xl mx-auto">
 			<div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 flex items-center justify-between">
@@ -171,6 +204,12 @@ export default function Udhaar() {
 				</div>
 			) : null}
 
+			{success ? (
+				<div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-4 text-base">
+					{success}
+				</div>
+			) : null}
+
 			<div className="space-y-4">
 				{loading ? (
 					<div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200 text-lg text-slate-500">
@@ -196,7 +235,7 @@ export default function Udhaar() {
 								<div>
 									<div className="font-bold text-lg text-slate-900">{u.creditorName}</div>
 									<div className="text-base text-slate-500 flex items-center gap-2 mt-1">
-										<Phone className="w-4 h-4" /> {u.upiId}
+										<Phone className="w-4 h-4" /> {u.upiIdMasked || maskUpiId(u.upiId)}
 									</div>
 								</div>
 								<div className={`flex items-center gap-2 text-base font-semibold ${meta.badge}`}>
@@ -226,7 +265,7 @@ export default function Udhaar() {
 							<div className="mt-4 flex gap-3 flex-wrap">
 								<button
 									className="text-md bg-sky-50 text-sky-600 px-4 py-2.5 rounded-xl font-semibold hover:bg-sky-100 flex items-center gap-2"
-									onClick={() => {}}
+									onClick={() => onSendReminder(u.id)}
 								>
 									<Bell className="w-4 h-4" /> Send Reminder
 								</button>
