@@ -29,6 +29,28 @@ function computeLoanAmount(item, daysLeft) {
   return Math.round(amount);
 }
 
+function slugifySkuPart(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 18);
+}
+
+async function generateUniqueSku({ merchantId, name }) {
+  const base = slugifySkuPart(name) || "ITEM";
+  // Add short suffix to avoid collisions (sku is globally unique).
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const candidate = `${base}-${suffix}`;
+    const existing = await inventoryService.getInventoryItemBySku(candidate);
+    if (!existing) return candidate;
+  }
+  // Last resort
+  return `${base}-${Date.now().toString(36).toUpperCase()}`;
+}
+
 // GET /api/inventory - list items for merchant
 router.get('/', async (req, res) => {
   try {
@@ -70,7 +92,16 @@ router.post('/', async (req, res) => {
     const merchantId = req.merchant?.id;
     if (!merchantId) return res.status(401).json({ error: 'Unauthorized' });
     const { name, sku, quantity, price } = req.body;
-    const item = await inventoryService.createInventoryItem({ name, sku, quantity: Number(quantity), price: Number(price), merchantId });
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const finalSku = sku ? String(sku) : await generateUniqueSku({ merchantId, name });
+    const item = await inventoryService.createInventoryItem({
+      name,
+      sku: finalSku,
+      quantity: Number(quantity),
+      price: Number(price),
+      merchantId,
+    });
     res.status(201).json(item);
   } catch (err) {
     res.status(400).json({ error: err.message });

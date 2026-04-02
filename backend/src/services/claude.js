@@ -13,13 +13,40 @@ const SYSTEM_PROMPT =
 
 function safeNumber(value) {
   const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? numberValue : 0;
+  if (!Number.isFinite(numberValue)) return 0;
+  // Voice may say "-800" (e.g., "online pay -800"); treat as amount.
+  return Math.abs(numberValue);
 }
 
 function normalizeText(text) {
+  const devanagariDigitsMap = {
+    "०": "0",
+    "१": "1",
+    "२": "2",
+    "३": "3",
+    "४": "4",
+    "५": "5",
+    "६": "6",
+    "७": "7",
+    "८": "8",
+    "९": "9",
+  };
+
   return String(text || "")
     .toLowerCase()
     .replace(/[₹,]/g, " ")
+    // Convert Devanagari digits like २०० => 200
+    .replace(/[०-९]/g, (d) => devanagariDigitsMap[d] || d)
+    // Normalize common Hindi keywords to ASCII tokens for stable parsing
+    .replace(/ऑनलाइन/g, " online ")
+    .replace(/यूपीआई/g, " upi ")
+    .replace(/कैश/g, " cash ")
+    .replace(/नकद/g, " cash ")
+    .replace(/उधार/g, " udhaar ")
+    .replace(/बाकी/g, " baaki ")
+    .replace(/टोटल/g, " total ")
+    .replace(/कुल/g, " total ")
+    .replace(/बिल/g, " bill ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -106,11 +133,31 @@ function extractAmountNearKeyword(text, keywordRegex) {
   const match = keywordRegex.exec(text);
   if (!match) return null;
 
-  const lookahead = text.slice(match.index, match.index + 40);
-  const digitMatch = lookahead.match(/(\d+(?:\.\d+)?)/);
-  if (digitMatch) return safeNumber(digitMatch[1]);
+  // Support both styles:
+  // - "cash 500" (amount after keyword)
+  // - "500 cash" (amount before keyword)
+  const start = Math.max(0, match.index - 18);
+  const end = Math.min(text.length, match.index + 40);
+  const windowText = text.slice(start, end);
 
-  const wordTokens = lookahead.split(" ").slice(0, 6);
+  // Prefer a number closest to the keyword within the window.
+  const keywordPosInWindow = match.index - start;
+  const numberMatches = Array.from(windowText.matchAll(/(-?\d+(?:\.\d+)?)/g));
+  if (numberMatches.length) {
+    let best = numberMatches[0];
+    let bestDist = Math.abs((best.index ?? 0) - keywordPosInWindow);
+    for (const m of numberMatches) {
+      const dist = Math.abs((m.index ?? 0) - keywordPosInWindow);
+      if (dist < bestDist) {
+        best = m;
+        bestDist = dist;
+      }
+    }
+    return safeNumber(best[1]);
+  }
+
+  // Try word-number parsing (closest words around keyword)
+  const wordTokens = windowText.split(" ").slice(0, 10);
   const wordNumber = parseSimpleNumberWordsToInt(wordTokens);
   if (wordNumber != null) return wordNumber;
 
@@ -122,13 +169,19 @@ function offlineParseTranscript(transcript) {
 
   // Keywords
   const total =
-    extractAmountNearKeyword(text, /(total|bill|billed|amount|kul|pura|poora)/g) ??
-    extractAmountNearKeyword(text, /(total|bill|amount)/g);
-  const cash = extractAmountNearKeyword(text, /(cash|nakad|nagadh|nagad)/g);
-  const upi = extractAmountNearKeyword(text, /(upi|gpay|phonepe|paytm|online)/g);
+    extractAmountNearKeyword(text, /(total|bill|billed|amount|kul|pura|poora|टोटल|कुल|बिल|रकम|अमाउंट)/g) ??
+    extractAmountNearKeyword(text, /(total|bill|amount|टोटल|कुल|बिल)/g);
+  const cash = extractAmountNearKeyword(text, /(cash|nakad|nagadh|nagad|कैश|नकद)/g);
+  const upi = extractAmountNearKeyword(
+    text,
+    /(upi|gpay|phonepe|paytm|online|यूपीआई|ऑनलाइन|फोनपे|पेटीएम|गूगलपे)/g
+  );
 
   // Udhaar is often said as "baaki udhaar" or "remaining udhaar"
-  let udhaar = extractAmountNearKeyword(text, /(udhaar|udharr|credit|baaki|baaki\s+udhaar|remaining)/g);
+  let udhaar = extractAmountNearKeyword(
+    text,
+    /(udhaar|udharr|credit|baaki|baaki\s+udhaar|remaining|उधार|उधार\s*|बाकी)/g
+  );
 
   const result = {
     total: safeNumber(total),

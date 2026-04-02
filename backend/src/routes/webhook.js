@@ -25,6 +25,7 @@ router.post("/paytm", async (req, res) => {
     // 2. Emit a socket event
     const io = getIO();
     io.emit("new_payment", transaction);
+    io.emit("transaction:created", transaction);
 
     console.log("New payment processed and event emitted:", transaction);
 
@@ -51,6 +52,7 @@ router.post("/trigger-payment", async (req, res) => {
 
     const io = getIO();
     io.emit("new_payment", transaction);
+    io.emit("transaction:created", transaction);
 
     console.log("Manual payment triggered and event emitted:", transaction);
 

@@ -8,8 +8,8 @@ const authRoutes = require("./routes/auth");
 const inventoryRoutes = require("./routes/inventory");
 const transactionRoutes = require("./routes/transactions");
 const udhaarRoutes = require("./routes/udhaar");
-const demoRoutes = require("./routes/demo");
 const webhookRoutes = require("./routes/webhook"); // Import webhook routes
+const dashboardRoutes = require("./routes/dashboard");
 const { authenticate } = require("./middleware/auth");
 
 const app = express();
@@ -22,9 +22,13 @@ const io = initSocket(server);
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Public routes
+app.get("/", (req, res) => {
+  res.json({ message: "Paytm Inventory Backend is running" });
+});
+
 app.use("/api/auth", authRoutes);
-app.use("/api/webhook", webhookRoutes); 
+app.use("/api/webhook", webhookRoutes);
 
 // All routes below this will be protected
 app.use(authenticate);
@@ -32,7 +36,7 @@ app.use(authenticate);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/udhaar", udhaarRoutes);
-app.use("/api/demo", demoRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Protected route example
 app.get("/api/protected", (req, res) => {
@@ -40,11 +44,6 @@ app.get("/api/protected", (req, res) => {
     message: "This is a protected route",
     merchant: req.merchant,
   });
-});
-
-// Health check
-app.get("/", (req, res) => {
-  res.json({ message: "Paytm Inventory Backend is running" });
 });
 
 // Start server
