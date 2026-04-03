@@ -4,8 +4,10 @@ import { LineChart, Line, ResponsiveContainer, Tooltip } from "recharts";
 
 import {
   createInventoryItem,
+  deleteInventoryItem,
   getApiErrorMessage,
   getInventory,
+  updateInventoryItem,
 } from "../lib/api";
 
 const fmt = (n) => {
@@ -15,6 +17,7 @@ const fmt = (n) => {
 };
 
 const inventoryCategories = ["All", "Grocery", "Dairy", "Snacks", "Home Care", "Beverages"];
+const categoryOptions = inventoryCategories.filter((c) => c !== "All");
 
 function guessCategory(name) {
   const s = String(name || "").toLowerCase();
@@ -43,6 +46,8 @@ export default function Inventory() {
   const [category, setCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editItem, setEditItem] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -52,6 +57,13 @@ export default function Inventory() {
     category: "",
     quantity: "",
     unit: "",
+    price: "",
+    lowStockThreshold: "",
+  });
+  const [editForm, setEditForm] = useState({
+    name: "",
+	category: "",
+    quantity: "",
     price: "",
     lowStockThreshold: "",
   });
@@ -77,9 +89,12 @@ export default function Inventory() {
 
   const viewItems = useMemo(() => {
     return items.map((it) => {
-      const category = guessCategory(it.name);
+	  const category = it.category ? String(it.category) : guessCategory(it.name);
       const daysLeft = Number(it.daysLeft);
-      const low = Number.isFinite(daysLeft) ? daysLeft < 3 : false;
+      const threshold = Number(it.lowStockThreshold);
+      const lowByThreshold = Number.isFinite(threshold) && threshold > 0 ? Number(it.quantity) < threshold : false;
+      const lowByDaysLeft = Number.isFinite(daysLeft) ? daysLeft < 3 : false;
+      const low = lowByThreshold || lowByDaysLeft;
       return {
         ...it,
         category,
@@ -105,18 +120,71 @@ export default function Inventory() {
     try {
       await createInventoryItem({
         name: form.name,
+			category: form.category || undefined,
         quantity: Number(form.quantity),
         price: Number(form.price),
+			lowStockThreshold: form.lowStockThreshold === "" ? undefined : Number(form.lowStockThreshold),
       });
       setShowAdd(false);
       setForm({
         name: "",
-        category: "",
+        category: "Grocery",
         quantity: "",
         unit: "",
         price: "",
         lowStockThreshold: "",
       });
+      await load();
+    } catch (e) {
+      setError(getApiErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEdit = (item) => {
+    setEditItem(item);
+    setEditForm({
+      name: String(item?.name || ""),
+		category: String(item?.category || "Grocery"),
+      quantity: String(item?.quantity ?? ""),
+      price: String(item?.price ?? ""),
+      lowStockThreshold: String(item?.lowStockThreshold ?? ""),
+    });
+    setShowEdit(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editItem?.id) return;
+    setSaving(true);
+    setError("");
+    try {
+      await updateInventoryItem(editItem.id, {
+        name: editForm.name,
+			category: editForm.category || undefined,
+        quantity: Number(editForm.quantity),
+        price: Number(editForm.price),
+        lowStockThreshold: editForm.lowStockThreshold === "" ? undefined : Number(editForm.lowStockThreshold),
+      });
+      setShowEdit(false);
+      setEditItem(null);
+      await load();
+    } catch (e) {
+      setError(getApiErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (item) => {
+    if (!item?.id) return;
+    const ok = window.confirm(`Delete "${item.name}"?`);
+    if (!ok) return;
+
+    setSaving(true);
+    setError("");
+    try {
+      await deleteInventoryItem(item.id);
       await load();
     } catch (e) {
       setError(getApiErrorMessage(e));
@@ -181,18 +249,19 @@ export default function Inventory() {
                 <th className="px-4 py-3 font-medium">Stock</th>
                 <th className="px-4 py-3 font-medium">Price</th>
                 <th className="px-4 py-3 font-medium">7-Day Trend</th>
+				<th className="px-4 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-500" colSpan={5}>
+                  <td className="px-4 py-4 text-slate-500" colSpan={6}>
                     Loading…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-4 text-slate-500" colSpan={5}>
+                  <td className="px-4 py-4 text-slate-500" colSpan={6}>
                     No items found.
                   </td>
                 </tr>
@@ -229,6 +298,24 @@ export default function Inventory() {
                           </ResponsiveContainer>
                         </div>
                       </td>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openEdit(item)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  disabled={saving}
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDelete(item)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100"
+                  disabled={saving}
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
                     </tr>
                   );
                 })
@@ -237,6 +324,99 @@ export default function Inventory() {
           </table>
         </div>
       </div>
+
+    {/* Edit Modal */}
+    {showEdit ? (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl w-full max-w-lg border border-slate-200 shadow-sm">
+          <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+            <div className="text-lg font-extrabold text-slate-900">Edit Item</div>
+            <button
+              onClick={() => {
+                setShowEdit(false);
+                setEditItem(null);
+              }}
+              className="p-2 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500">Name</label>
+              <input
+                value={editForm.name}
+                onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                className="mt-1 w-full px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-sky-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500">Category</label>
+              <select
+                value={editForm.category}
+                onChange={(e) => setEditForm((p) => ({ ...p, category: e.target.value }))}
+                className="mt-1 w-full px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-sky-400 focus:outline-none"
+              >
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500">Quantity</label>
+                <input
+                  type="number"
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm((p) => ({ ...p, quantity: e.target.value }))}
+                  className="mt-1 w-full px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-sky-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">Price</label>
+                <input
+                  type="number"
+                  value={editForm.price}
+                  onChange={(e) => setEditForm((p) => ({ ...p, price: e.target.value }))}
+                  className="mt-1 w-full px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-sky-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500">Low Stock Threshold</label>
+                <input
+                  type="number"
+                  value={editForm.lowStockThreshold}
+                  onChange={(e) => setEditForm((p) => ({ ...p, lowStockThreshold: e.target.value }))}
+                  className="mt-1 w-full px-4 py-2 border border-slate-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-sky-400 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setShowEdit(false);
+                  setEditItem(null);
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdate}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-sky-500 text-white hover:bg-sky-600"
+                disabled={saving}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : null}
 
       {/* Add modal */}
       {showAdd ? (
@@ -260,12 +440,17 @@ export default function Inventory() {
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 className="w-full h-12 px-5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
               />
-              <input
-                placeholder="Category"
-                value={form.category}
-                onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-                className="w-full h-12 px-5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400"
-              />
+              <select
+					value={form.category || "Grocery"}
+					onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+					className="w-full h-12 px-5 rounded-2xl border border-slate-200 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
+				>
+					{categoryOptions.map((c) => (
+						<option key={c} value={c}>
+							{c}
+						</option>
+					))}
+				</select>
               <input
                 placeholder="Stock"
                 value={form.quantity}

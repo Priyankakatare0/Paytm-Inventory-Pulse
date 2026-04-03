@@ -5,6 +5,146 @@ const { parseTranscript } = require("../services/claude");
 const { getIO } = require("../services/socket");
 const { maskUpiId, hashUpiId } = require("../services/privacy");
 
+function isDevanagari(text) {
+  return /[\u0900-\u097f]/u.test(String(text || ""));
+}
+
+function devanagariToLatin(input) {
+  const s = String(input || "").trim();
+  if (!s) return "";
+
+  const vowels = {
+    "अ": "a",
+    "आ": "aa",
+    "इ": "i",
+    "ई": "ii",
+    "उ": "u",
+    "ऊ": "uu",
+    "ए": "e",
+    "ऐ": "ai",
+    "ओ": "o",
+    "औ": "au",
+    "ऋ": "ri",
+  };
+
+  const cons = {
+    "क": "k",
+    "ख": "kh",
+    "ग": "g",
+    "घ": "gh",
+    "ङ": "ng",
+    "च": "ch",
+    "छ": "chh",
+    "ज": "j",
+    "झ": "jh",
+    "ञ": "ny",
+    "ट": "t",
+    "ठ": "th",
+    "ड": "d",
+    "ढ": "dh",
+    "ण": "n",
+    "त": "t",
+    "थ": "th",
+    "द": "d",
+    "ध": "dh",
+    "न": "n",
+    "प": "p",
+    "फ": "ph",
+    "ब": "b",
+    "भ": "bh",
+    "म": "m",
+    "य": "y",
+    "र": "r",
+    "ल": "l",
+    "व": "v",
+    "श": "sh",
+    "ष": "sh",
+    "स": "s",
+    "ह": "h",
+    "ळ": "l",
+  };
+
+  const matras = {
+    "ा": "aa",
+    "ि": "i",
+    "ी": "ii",
+    "ु": "u",
+    "ू": "uu",
+    "े": "e",
+    "ै": "ai",
+    "ो": "o",
+    "ौ": "au",
+    "ृ": "ri",
+  };
+
+  const virama = "्";
+  const anusvara = "ं";
+  const chandrabindu = "ँ";
+  const visarga = "ः";
+
+  let out = "";
+  const chars = Array.from(s);
+  const peek = (i) => (i >= 0 && i < chars.length ? chars[i] : "");
+
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (/\s/.test(ch)) {
+      out += " ";
+      continue;
+    }
+    if (!isDevanagari(ch)) {
+      out += ch;
+      continue;
+    }
+    if (vowels[ch]) {
+      out += vowels[ch];
+      continue;
+    }
+    if (cons[ch]) {
+      const base = cons[ch];
+      const next = peek(i + 1);
+      if (next === virama) {
+        out += base;
+        i += 1;
+        continue;
+      }
+      if (matras[next]) {
+        out += base + matras[next];
+        i += 1;
+        continue;
+      }
+      out += base + "a";
+      continue;
+    }
+    if (ch === anusvara || ch === chandrabindu) {
+      out += "n";
+      continue;
+    }
+    if (ch === visarga) {
+      out += "h";
+      continue;
+    }
+  }
+
+  out = out.replace(/\s+/g, " ").trim();
+  if (out.endsWith("a") && /[\u0915-\u0939\u0958-\u095f]$/u.test(s)) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
+function toDisplayName(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const latin = isDevanagari(s) ? devanagariToLatin(s) : s;
+  const cleaned = latin.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  return cleaned
+    .split(" ")
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 function inferPersonName(rawTranscript) {
   const raw = String(rawTranscript || "").trim();
   if (!raw) return "";
@@ -21,6 +161,8 @@ function inferPersonName(rawTranscript) {
     "paid",
     "pay",
     "payed",
+    "paida",
+    "aaraes",
     "sent",
     "received",
     "gave",
@@ -38,6 +180,9 @@ function inferPersonName(rawTranscript) {
     "rupaye",
     "rupees",
     "rs",
+    "rupee",
+    "paisa",
+    "paise",
     "cash",
     "upi",
     "online",
@@ -109,12 +254,15 @@ function inferPersonName(rawTranscript) {
   if (!nameTokens.length) return "";
   const name = nameTokens.join(" ");
 
-  // If it's Devanagari, keep as-is; if latin, capitalize.
-  if (/[\u0900-\u097f]/u.test(name)) return name;
-  return name
+  const display = toDisplayName(name) || "";
+  if (!display) return "";
+  const parts = display
     .split(" ")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .filter((p) => !stopWords.includes(p.toLowerCase()));
+
+  return parts.slice(0, 2).join(" ");
 }
 
 // GET /api/transactions — recent payments/transactions for merchant

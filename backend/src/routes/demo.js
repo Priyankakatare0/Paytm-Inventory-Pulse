@@ -52,6 +52,7 @@ router.post("/fire-payment", async (req, res) => {
     try {
       const io = getIO();
       io.emit("new_payment", transaction);
+      io.emit("transaction:created", transaction);
     } catch (_) {
       // Socket not initialized / no clients connected — still ok for demo
     }

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import VoiceButton from "../components/VoiceButton";
+import { extractPersonName } from "../lib/text";
 import { getDashboardSummary, getApiErrorMessage } from "../lib/api";
 import { getSocket } from "../lib/socket";
 
@@ -56,9 +57,11 @@ function toFeedLabel(description) {
   const raw = (description && String(description).trim()) || "";
   if (!raw) return "Customer";
   const m = raw.match(/^voice\s*:\s*([\u0900-\u097fa-zA-Z]+)/u);
-  if (m && m[1]) return m[1];
+  if (m && m[1]) {
+		return extractPersonName(m[1]);
+	}
   if (/^voice\s*:/i.test(raw)) return "Voice Entry";
-  return raw;
+	return extractPersonName(raw);
 }
 
 export default function Dashboard() {

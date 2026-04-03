@@ -21,13 +21,21 @@ function computeDaysLeft(quantity, dailyRate) {
 function buildRestockOfferFromInventory(items) {
   const targetDays = 7; // keep 7-day buffer
   const suggestions = [];
+  let hasLowStockRisk = false;
 
   for (const item of Array.isArray(items) ? items : []) {
     const dailyRate = clampNumber(item?.dailyRate ?? item?.daily_rate ?? item?.depletion_rate, 0);
     const quantity = clampNumber(item?.quantity, 0);
     const price = clampNumber(item?.price, 0);
+    const threshold = clampNumber(item?.lowStockThreshold, 0);
+    if (threshold > 0 && quantity < threshold) {
+      hasLowStockRisk = true;
+    }
     if (dailyRate <= 0 || price <= 0) continue;
     const daysLeft = computeDaysLeft(quantity, dailyRate);
+    if (daysLeft < 3) {
+      hasLowStockRisk = true;
+    }
     const targetStock = dailyRate * targetDays;
     const gapUnits = Math.max(0, Math.ceil(targetStock - quantity));
     const amount = gapUnits * price;
@@ -51,7 +59,7 @@ function buildRestockOfferFromInventory(items) {
 
   const count = top.length;
   const names = top.map((x) => x.name);
-  return { totalAmount, count, names };
+  return { totalAmount, count, names, hasLowStockRisk };
 }
 
 export default function Loan() {
@@ -59,11 +67,29 @@ export default function Loan() {
   const [liveOffer, setLiveOffer] = useState(null);
 	const [inventoryOffer, setInventoryOffer] = useState(null);
 	const [activeLoans, setActiveLoans] = useState([]);
+  const [flashOffer, setFlashOffer] = useState(false);
+  const [lowStockNotified, setLowStockNotified] = useState(() => {
+    try {
+      return sessionStorage.getItem("ip_low_stock_notified") === "1";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const socket = getSocket();
     const onLowStock = (payload) => {
       if (!payload || typeof payload !== "object") return;
+    if (lowStockNotified) return;
+    setLowStockNotified(true);
+    try {
+      sessionStorage.setItem("ip_low_stock_notified", "1");
+    } catch {
+      // ignore
+    }
+
+    setFlashOffer(true);
+    setTimeout(() => setFlashOffer(false), 1600);
 
 		// When stock goes low, recompute the restock offer from inventory (more accurate than a single-item payload)
 		setInventoryOffer(null);
@@ -82,7 +108,7 @@ export default function Loan() {
     return () => {
       socket.off("low_stock", onLowStock);
     };
-  }, []);
+  }, [lowStockNotified]);
 
   useEffect(() => {
     (async () => {
@@ -90,12 +116,23 @@ export default function Loan() {
         const items = await getInventory();
         const computed = buildRestockOfferFromInventory(items);
         setInventoryOffer(computed);
+
+			if (computed?.hasLowStockRisk && !lowStockNotified) {
+				setLowStockNotified(true);
+				try {
+					sessionStorage.setItem("ip_low_stock_notified", "1");
+				} catch {
+					// ignore
+				}
+				setFlashOffer(true);
+				setTimeout(() => setFlashOffer(false), 1600);
+			}
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn("Failed to load inventory for loan offer", getApiErrorMessage(e));
       }
     })();
-  }, []);
+  }, [lowStockNotified]);
 
   function addActiveLoanFromOffer(offer) {
     const amount = clampNumber(offer?.amount, 0);
@@ -183,7 +220,9 @@ export default function Loan() {
           return (
             <div
               key={loan.id}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200"
+              className={`bg-white rounded-2xl p-6 shadow-sm border border-slate-200 ${
+					isOffer && flashOffer ? "animate-pulse ring-2 ring-sky-200" : ""
+				}`}
             >
               <div className="flex items-start justify-between gap-6">
                 <div className="flex items-start gap-3">

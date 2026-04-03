@@ -31,10 +31,12 @@ model Merchant {
 model InventoryItem {
   id        Int     @id @default(autoincrement())
   name      String
+  category  String  @default("Grocery")
   sku       String  @unique
   quantity  Int
   price     Float
   dailyRate Float   @default(10)
+  lowStockThreshold Int @default(3)
 
   // Foreign key
   merchantId Int

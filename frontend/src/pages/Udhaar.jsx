@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { createUdhaar, getUdhaar, sendUdhaarReminder, settleUdhaar } from "../lib/api";
 import { getSocket } from "../lib/socket";
+import { extractPersonName } from "../lib/text";
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString("en-IN")}`;
 
@@ -233,7 +234,7 @@ export default function Udhaar() {
 						<div key={u.id} className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
 							<div className="flex items-start justify-between">
 								<div>
-									<div className="font-bold text-lg text-slate-900">{u.creditorName}</div>
+									<div className="font-bold text-lg text-slate-900">{extractPersonName(u.creditorName)}</div>
 									<div className="text-base text-slate-500 flex items-center gap-2 mt-1">
 										<Phone className="w-4 h-4" /> {u.upiIdMasked || maskUpiId(u.upiId)}
 									</div>

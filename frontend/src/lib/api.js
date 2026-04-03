@@ -24,6 +24,35 @@ api.interceptors.request.use((config) => {
 	return config;
 });
 
+api.interceptors.response.use(
+	(res) => res,
+	(err) => {
+		const status = err?.response?.status;
+		const url = err?.config?.url ? String(err.config.url) : "";
+		const isAuthCall = url.startsWith("/auth/") || url.includes("/auth/");
+
+		if (status === 401 && !isAuthCall) {
+			try {
+				localStorage.removeItem("ip_token");
+			} catch {
+				// ignore
+			}
+
+			try {
+				const path = typeof window !== "undefined" ? window.location.pathname : "";
+				const alreadyOnAuth = path === "/login" || path === "/signup";
+				if (!alreadyOnAuth && typeof window !== "undefined") {
+					window.location.assign("/login");
+				}
+			} catch {
+				// ignore
+			}
+		}
+
+		return Promise.reject(err);
+	}
+);
+
 export function getApiErrorMessage(error) {
 	return (
 		error?.response?.data?.error ||

@@ -8,6 +8,12 @@ function clampNumber(value, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function clampInt(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.trunc(n);
+}
+
 function computeDaysLeft(quantity, dailyRate) {
   const q = clampNumber(quantity, 0);
   const rate = clampNumber(dailyRate, 0);
@@ -91,15 +97,18 @@ router.post('/', async (req, res) => {
   try {
     const merchantId = req.merchant?.id;
     if (!merchantId) return res.status(401).json({ error: 'Unauthorized' });
-    const { name, sku, quantity, price } = req.body;
+    const { name, category, sku, quantity, price, dailyRate, lowStockThreshold } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     const finalSku = sku ? String(sku) : await generateUniqueSku({ merchantId, name });
     const item = await inventoryService.createInventoryItem({
       name,
+      category: category ? String(category) : undefined,
       sku: finalSku,
       quantity: Number(quantity),
       price: Number(price),
+      dailyRate: clampNumber(dailyRate, undefined),
+      lowStockThreshold: Math.max(0, clampInt(lowStockThreshold, 3)),
       merchantId,
     });
     res.status(201).json(item);
@@ -141,11 +150,15 @@ router.post('/sale', async (req, res) => {
     const updated = await inventoryService.updateInventoryItem(item.id, { quantity: newQty });
 
     const daysLeft = computeDaysLeft(updated.quantity, updated.dailyRate);
-    if (daysLeft < 3) {
+    const threshold = clampInt(updated.lowStockThreshold, 3);
+    const belowThreshold = Number.isFinite(threshold) ? updated.quantity < threshold : false;
+    if (daysLeft < 3 || belowThreshold) {
       const payload = {
         item: updated,
         daysLeft,
         loanAmount: computeLoanAmount(updated, daysLeft),
+        belowThreshold,
+        threshold,
       };
 
       try {
@@ -171,7 +184,20 @@ router.put('/:id', async (req, res) => {
     const existing = await inventoryService.getInventoryItem(id);
     if (!existing) return res.status(404).json({ error: 'Not found' });
     if (existing.merchantId !== Number(merchantId)) return res.status(403).json({ error: 'Forbidden' });
-    const data = req.body;
+    const data = { ...req.body };
+
+    if (Object.prototype.hasOwnProperty.call(data, 'category')) {
+      data.category = data.category ? String(data.category) : undefined;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(data, 'lowStockThreshold')) {
+      data.lowStockThreshold = Math.max(0, clampInt(data.lowStockThreshold, 3));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(data, 'dailyRate')) {
+      data.dailyRate = clampNumber(data.dailyRate, existing.dailyRate);
+    }
+
     const updated = await inventoryService.updateInventoryItem(id, data);
     res.json(updated);
   } catch (err) {

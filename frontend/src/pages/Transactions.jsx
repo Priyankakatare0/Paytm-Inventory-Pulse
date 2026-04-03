@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { getTransactions, getApiErrorMessage } from "../lib/api";
+import { extractPersonName } from "../lib/text";
 
 const fmt = (n) => {
 	const num = Number(n);
@@ -49,9 +50,11 @@ function toCustomerLabel(description) {
 	const raw = (description && String(description).trim()) || "";
 	if (!raw) return "Walk-in";
 	const m = raw.match(/^voice\s*:\s*([\u0900-\u097fa-zA-Z]+)/u);
-	if (m && m[1]) return m[1];
+	if (m && m[1]) {
+		return extractPersonName(m[1]);
+	}
 	if (/^voice\s*:/i.test(raw)) return "Voice Entry";
-	return raw;
+	return extractPersonName(raw);
 }
 
 const typeFilters = [

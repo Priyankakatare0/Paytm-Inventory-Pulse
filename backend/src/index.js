@@ -10,6 +10,7 @@ const inventoryRoutes = require("./routes/inventory");
 const transactionRoutes = require("./routes/transactions");
 const udhaarRoutes = require("./routes/udhaar");
 const webhookRoutes = require("./routes/webhook"); // Import webhook routes
+const demoRoutes = require("./routes/demo");
 const dashboardRoutes = require("./routes/dashboard");
 const { authenticate } = require("./middleware/auth");
 
@@ -29,11 +30,12 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/webhook", webhookRoutes);
 
 // All routes below this will be protected
 app.use(authenticate);
 
+app.use("/api/webhook", webhookRoutes);
+app.use("/api/demo", demoRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/udhaar", udhaarRoutes);
