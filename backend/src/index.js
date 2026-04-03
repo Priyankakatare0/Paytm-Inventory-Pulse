@@ -17,6 +17,28 @@ const { authenticate } = require("./middleware/auth");
 const app = express();
 const server = http.createServer(app);
 
+function logDbTarget() {
+  try {
+    const raw = process.env.DATABASE_URL;
+    if (!raw) {
+      console.log("🗄️ DATABASE_URL not set");
+      return;
+    }
+    const u = new URL(raw);
+    const safe = {
+      host: u.hostname,
+      port: u.port,
+      db: u.pathname,
+      sslmode: u.searchParams.get("sslmode"),
+      pgbouncer: u.searchParams.get("pgbouncer"),
+      statement_cache_size: u.searchParams.get("statement_cache_size"),
+    };
+    console.log("🗄️ DB target:", safe);
+  } catch {
+    console.log("🗄️ DATABASE_URL is set (unable to parse)");
+  }
+}
+
 // Initialize Socket.io
 const io = initSocket(server);
 
@@ -54,6 +76,8 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
   console.log(`🔑 Login at POST http://localhost:${PORT}/api/auth/login`);
+
+  logDbTarget();
 
 	startReminderCron();
 	console.log("⏰ Reminder cron started");
