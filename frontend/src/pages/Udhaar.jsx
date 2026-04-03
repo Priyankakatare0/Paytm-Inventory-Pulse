@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	AlertCircle,
 	Bell,
@@ -52,7 +52,9 @@ export default function Udhaar() {
 	const [loading, setLoading] = useState(true);
 	const [items, setItems] = useState([]);
 	const [error, setError] = useState("");
-		const [success, setSuccess] = useState("");
+	const [success, setSuccess] = useState("");
+	const refreshSeq = useRef(0);
+	const nonSilentSeq = useRef(0);
 
 	const [form, setForm] = useState({
 		customerName: "",
@@ -61,17 +63,28 @@ export default function Udhaar() {
 		dueDate: "",
 	});
 
-	async function refresh() {
-		setError("");
-		setSuccess("");
-		setLoading(true);
+	async function refresh({ silent } = {}) {
+		const seq = ++refreshSeq.current;
+		if (!silent) {
+			nonSilentSeq.current = seq;
+			setError("");
+			setSuccess("");
+			setLoading(true);
+		}
 		try {
 			const data = await getUdhaar();
-			setItems(Array.isArray(data?.items) ? data.items : []);
+			// Prevent older, slower requests from overwriting newer state.
+			if (seq === refreshSeq.current) {
+				setItems(Array.isArray(data?.items) ? data.items : []);
+			}
 		} catch (e) {
-			setError(e?.response?.data?.error || e?.message || "Failed to load udhaar");
+			if (!silent && seq === nonSilentSeq.current) {
+				setError(e?.response?.data?.error || e?.message || "Failed to load udhaar");
+			}
 		} finally {
-			setLoading(false);
+			if (!silent && seq === nonSilentSeq.current) {
+				setLoading(false);
+			}
 		}
 	}
 
@@ -82,14 +95,14 @@ export default function Udhaar() {
 	useEffect(() => {
 		// Safety-net polling so the list updates even if a socket event is missed.
 		const id = setInterval(() => {
-			refresh();
+			refresh({ silent: true });
 		}, 2000);
 		return () => clearInterval(id);
 	}, []);
 
 	useEffect(() => {
 		const onUdhaarChanged = () => {
-			refresh();
+			refresh({ silent: true });
 		};
 		const socket = getSocket();
 
