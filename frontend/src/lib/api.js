@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Vite env override (recommended): add to `frontend/.env`
 // VITE_API_BASE_URL=http://localhost:5000
-const DEFAULT_BASE_URL = "http://localhost:5000";
+const DEFAULT_BASE_URL = "https://paytm-inventory-pulse.onrender.com";
 
 export const API_BASE_URL =
 	(typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) ||
