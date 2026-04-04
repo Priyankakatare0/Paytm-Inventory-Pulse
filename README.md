@@ -1,3 +1,5 @@
+#PPT Link - https://docs.google.com/presentation/d/1xAfu7tFmelFy_wEPIA7yxX738fVftTDf/edit?usp=drivesdk&ouid=101542413694794534143&rtpof=true&sd=true
+
 # Paytm Inventory Pulse (InventoryPulse)
 
 A hackathon-ready inventory + transactions + udhaar dashboard.
